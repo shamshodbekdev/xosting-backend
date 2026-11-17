@@ -1,0 +1,65 @@
+# Celery beat must run as a singleton, hence Recreate instead of RollingUpdate.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: billing-beat
+  labels:
+    app.kubernetes.io/name: billing-beat
+    app.kubernetes.io/component: scheduler
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app.kubernetes.io/name: billing-beat }
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: billing-beat
+        app.kubernetes.io/component: scheduler
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: { app.kubernetes.io/name: billing-beat }
+      containers:
+        - name: billing-beat
+          image: ghcr.io/shamshodbekdev/xosting-billing-service:latest
+          imagePullPolicy: IfNotPresent
+          command: ["celery", "-A", "config", "beat", "--loglevel", "INFO", "--schedule", "/tmp/celerybeat-schedule"]
+          envFrom:
+            - configMapRef: { name: xosting-config }
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: xosting-secrets, key: BILLING_DATABASE_URL } }
+            - name: DJANGO_SECRET_KEY
+              valueFrom: { secretKeyRef: { name: xosting-secrets, key: BILLING_DJANGO_SECRET_KEY } }
+            - name: JWT_SECRET
+              valueFrom: { secretKeyRef: { name: xosting-secrets, key: JWT_SECRET } }
+          lifecycle:
+            preStop:
+              # Give endpoints/ingress time to stop routing before SIGTERM.
+              sleep: { seconds: 5 }
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 256Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 128Mi }

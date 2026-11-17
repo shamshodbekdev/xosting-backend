@@ -1,0 +1,28 @@
+# Public entry point (ingress-nginx + cert-manager). Every request goes
+# through api-gateway, which owns auth, rate limiting and routing.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: xosting-api
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: 10m
+    # Long-lived WebSocket connections for live support chat.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [api.xosting.net]
+      secretName: api-xosting-net-tls
+  rules:
+    - host: api.xosting.net
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port: { name: http }

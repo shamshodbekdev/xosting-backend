@@ -1,0 +1,46 @@
+# Deploy:  make deploy-k8s            (wraps: kubectl apply -k infrastructure/k8s)
+# Render:  kubectl kustomize infrastructure/k8s
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: xosting
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: xosting
+    includeSelectors: false
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - postgres.yaml
+  - redis.yaml
+  - services/auth-service.yaml
+  - services/billing-service.yaml
+  - services/billing-worker.yaml
+  - services/billing-beat.yaml
+  - services/hosting-service.yaml
+  - services/domain-service.yaml
+  - services/support-service.yaml
+  - services/notification-service.yaml
+  - services/api-gateway.yaml
+  - jobs/migrations.yaml
+  - hpa.yaml
+  - pdb.yaml
+  - network-policy.yaml
+  - ingress.yaml
+
+# Secrets come from a git-ignored env file (see secrets.env.example).
+secretGenerator:
+  - name: xosting-secrets
+    envs: [secrets.env]
+
+# Pin image tags per release: `make deploy-k8s TAG=v1.2.3`
+images:
+  - { name: ghcr.io/shamshodbekdev/xosting-auth-service, newTag: latest }
+  - { name: ghcr.io/shamshodbekdev/xosting-billing-service, newTag: latest }
+  - { name: ghcr.io/shamshodbekdev/xosting-hosting-service, newTag: latest }
+  - { name: ghcr.io/shamshodbekdev/xosting-domain-service, newTag: latest }
+  - { name: ghcr.io/shamshodbekdev/xosting-support-service, newTag: latest }
+  - { name: ghcr.io/shamshodbekdev/xosting-notification-service, newTag: latest }
+  - { name: ghcr.io/shamshodbekdev/xosting-api-gateway, newTag: latest }

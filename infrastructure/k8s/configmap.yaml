@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: xosting-config
+data:
+  ENVIRONMENT: production
+  LOG_LEVEL: INFO
+  REDIS_URL: redis://redis:6379/0
+  EVENTS_STREAM: xosting.events
+  JWT_ISSUER: xosting-auth
+  JWT_AUDIENCE: xosting-api
+  JWT_ACCESS_TTL_MINUTES: "15"
+  JWT_REFRESH_TTL_DAYS: "7"
+  OTEL_EXPORTER_OTLP_ENDPOINT: ""
+
+  # Service discovery (cluster DNS)
+  AUTH_SERVICE_URL: http://auth-service:8000
+  BILLING_SERVICE_URL: http://billing-service:8000
+  HOSTING_SERVICE_URL: http://hosting-service:8000
+  DOMAIN_SERVICE_URL: http://domain-service:8000
+  SUPPORT_SERVICE_URL: http://support-service:8000
+
+  # Django
+  DJANGO_DEBUG: "false"
+  DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,auth-service,billing-service,api.xosting.net
+  DJANGO_CSRF_TRUSTED_ORIGINS: https://api.xosting.net
+  WEB_CONCURRENCY: "2"
+
+  # billing-service / Celery
+  CELERY_BROKER_URL: redis://redis:6379/1
+  CELERY_RESULT_BACKEND: redis://redis:6379/2
+  BILLING_CURRENCY: UZS
+  BILLING_INVOICE_DUE_DAYS: "3"
+  BILLING_RENEWAL_LEAD_DAYS: "7"
+  BILLING_SUSPEND_GRACE_DAYS: "5"
+
+  # hosting-service
+  ISPMANAGER_URL: https://panel.xosting.net:1500
+  ISPMANAGER_USERNAME: root
+  ISPMANAGER_VERIFY_TLS: "true"
+  HOSTING_SERVER_NAME: web-01.xosting.net
+  HOSTING_PLAN_PRESETS: '{"hosting-start":"start","hosting-business":"business","hosting-pro":"pro"}'
+
+  # domain-service
+  RDAP_BASE_URL: https://rdap.org
+
+  # notification-service
+  SMTP_HOST: smtp.xosting.net
+  SMTP_PORT: "587"
+  SMTP_TLS_MODE: starttls
+  SMTP_USERNAME: no-reply@xosting.net
+  SMTP_FROM: xosting.net <no-reply@xosting.net>
+  TELEGRAM_ADMIN_CHAT_ID: ""
+
+  # api-gateway
+  RATE_LIMIT_DEFAULT: "300"
+  RATE_LIMIT_AUTH: "10"
+  RATE_LIMIT_WINDOW: 1m
+  CORS_ALLOWED_ORIGINS: https://xosting.net,https://my.xosting.net
+  TRUSTED_PROXIES: 10.0.0.0/8

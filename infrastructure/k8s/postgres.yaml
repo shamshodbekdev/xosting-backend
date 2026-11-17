@@ -1,0 +1,113 @@
+# In-cluster PostgreSQL for self-hosted / staging clusters.
+# Production recommendation: a managed, highly-available PostgreSQL
+# (e.g. CloudNativePG operator, RDS, Cloud SQL) — only the *_DATABASE_URL
+# secrets need to change.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+data:
+  # Mirrors infrastructure/docker/postgres/init-databases.sh
+  10-init-databases.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+    create_database() {
+      local db="$1" user="$2" password="$3"
+      psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres \
+           -v db="$db" -v user="$user" -v password="$password" <<'SQL'
+    SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'user', :'password')
+    WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'user') \gexec
+    SELECT format('CREATE DATABASE %I OWNER %I', :'db', :'user')
+    WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = :'db') \gexec
+    SELECT format('REVOKE ALL ON DATABASE %I FROM PUBLIC', :'db') \gexec
+    SQL
+    }
+    create_database auth_db    auth_user    "${AUTH_DB_PASSWORD:?}"
+    create_database billing_db billing_user "${BILLING_DB_PASSWORD:?}"
+    create_database hosting_db hosting_user "${HOSTING_DB_PASSWORD:?}"
+    create_database domain_db  domain_user  "${DOMAIN_DB_PASSWORD:?}"
+    create_database support_db support_user "${SUPPORT_DB_PASSWORD:?}"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels: { app.kubernetes.io/name: postgres }
+spec:
+  clusterIP: None
+  selector: { app.kubernetes.io/name: postgres }
+  ports:
+    - { name: postgres, port: 5432, targetPort: postgres }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  labels: { app.kubernetes.io/name: postgres, app.kubernetes.io/component: database }
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: postgres }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: postgres, app.kubernetes.io/component: database }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70        # "postgres" user of the alpine image
+        runAsGroup: 70
+        fsGroup: 70
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: postgres
+          image: postgres:17-alpine
+          ports:
+            - { name: postgres, containerPort: 5432 }
+          env:
+            - { name: POSTGRES_USER, value: postgres }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: xosting-secrets, key: POSTGRES_PASSWORD } }
+            - name: AUTH_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: xosting-secrets, key: AUTH_DB_PASSWORD } }
+            - name: BILLING_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: xosting-secrets, key: BILLING_DB_PASSWORD } }
+            - name: HOSTING_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: xosting-secrets, key: HOSTING_DB_PASSWORD } }
+            - name: DOMAIN_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: xosting-secrets, key: DOMAIN_DB_PASSWORD } }
+            - name: SUPPORT_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: xosting-secrets, key: SUPPORT_DB_PASSWORD } }
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "postgres", "-d", "postgres"] }
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            exec: { command: ["pg_isready", "-U", "postgres", "-d", "postgres"] }
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { memory: 2Gi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+            - { name: init, mountPath: /docker-entrypoint-initdb.d, readOnly: true }
+            - { name: run, mountPath: /var/run/postgresql }
+      volumes:
+        - name: init
+          configMap: { name: postgres-init, defaultMode: 0555 }
+        - name: run
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests: { storage: 20Gi }

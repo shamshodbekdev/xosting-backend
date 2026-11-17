@@ -1,0 +1,97 @@
+# Zero-trust networking inside the namespace: deny all ingress by default,
+# then open only the paths the architecture needs. Egress stays open for
+# ISPmanager, RDAP, SMTP and the Telegram API.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+# Internet -> ingress controller -> api-gateway (the only public entry point).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-gateway
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: api-gateway }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: ingress-nginx }
+      ports:
+        - { port: 8080, protocol: TCP }
+---
+# api-gateway -> backend APIs.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-gateway-to-apis
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [auth-service, billing-service, hosting-service, domain-service, support-service]
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: api-gateway }
+      ports:
+        - { port: 8000, protocol: TCP }
+---
+# notification-service -> auth-service internal contact API.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-notification-to-auth
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: auth-service }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: notification-service }
+      ports:
+        - { port: 8000, protocol: TCP }
+---
+# Workloads in this namespace -> PostgreSQL and Redis.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-datastores
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [postgres, redis]
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - { port: 5432, protocol: TCP }
+        - { port: 6379, protocol: TCP }
+---
+# Prometheus (namespace "monitoring") -> /metrics on every workload.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prometheus-scrape
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: monitoring }
+      ports:
+        - { port: 8000, protocol: TCP }
+        - { port: 8080, protocol: TCP }
+        - { port: 8090, protocol: TCP }
