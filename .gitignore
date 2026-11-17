@@ -1,0 +1,34 @@
+# Secrets & local config
+.env
+.env.*
+!.env.example
+infrastructure/k8s/secrets.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.sqlite3
+staticfiles/
+
+# Go
+*.test
+*.out
+/bin/
+go.work.sum
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
