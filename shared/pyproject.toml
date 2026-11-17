@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xosting-shared"
+version = "0.1.0"
+description = "Cross-cutting libraries (logging, metrics, tracing, security, events) shared by xosting.net Python services."
+requires-python = ">=3.12"
+dependencies = [
+    "prometheus-client>=0.26",
+    "pyjwt>=2.15",
+]
+
+[project.optional-dependencies]
+redis = ["redis>=8.1"]
+fastapi = ["fastapi>=0.163"]
+tracing = [
+    "opentelemetry-sdk>=1.45",
+    "opentelemetry-exporter-otlp-proto-http>=1.45",
+]
+
+[tool.setuptools]
+package-dir = { "xosting_shared" = "." }
+packages = [
+    "xosting_shared",
+    "xosting_shared.logger",
+    "xosting_shared.metrics",
+    "xosting_shared.tracing",
+    "xosting_shared.security",
+    "xosting_shared.events",
+    "xosting_shared.fastapi_kit",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "SIM"]
+ignore = ["B008"]  # FastAPI's Depends() in defaults is idiomatic
+
+[tool.ruff.lint.isort]
+known-first-party = ["xosting_shared"]
