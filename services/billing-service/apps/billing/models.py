@@ -148,6 +148,8 @@ class Payment(models.Model):
         PAYME = "payme", "Payme"
         CLICK = "click", "Click"
         UZUM = "uzum", "Uzum"
+        CHECKOUT = "checkout", "CHECKOUT.UZ"
+        PAYNET = "paynet", "Paynet"
 
     class Status(models.TextChoices):
         SUCCEEDED = "succeeded", "Succeeded"

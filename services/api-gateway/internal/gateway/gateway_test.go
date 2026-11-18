@@ -128,6 +128,7 @@ func TestRoutesToUpstreamsAndInjectsIdentity(t *testing.T) {
 
 	cases := map[string]string{
 		"/api/v1/billing/invoices":    "billing",
+		"/api/v1/payments/checkout":   "billing",
 		"/api/v1/hosting/accounts":    "hosting",
 		"/api/v1/domains":             "domain",
 		"/api/v1/support/tickets/abc": "support",
@@ -167,6 +168,12 @@ func TestAuthenticationPolicy(t *testing.T) {
 	// Public endpoints work anonymously; an invalid token there is ignored, not fatal.
 	if resp, body := do(t, http.MethodGet, gw.URL+"/api/v1/billing/plans", "", nil); resp.StatusCode != 200 || body.Service != "billing" {
 		t.Fatalf("public plans: %d", resp.StatusCode)
+	}
+	if resp, body := do(t, http.MethodPost, gw.URL+"/api/v1/payments/webhook/click/", "", nil); resp.StatusCode != 200 || body.Service != "billing" {
+		t.Fatalf("public payment webhook: %d", resp.StatusCode)
+	}
+	if resp, _ := do(t, http.MethodPost, gw.URL+"/api/v1/payments/checkout", "", nil); resp.StatusCode != 401 {
+		t.Fatalf("checkout requires a token: got %d", resp.StatusCode)
 	}
 	if resp, _ := do(t, http.MethodGet, gw.URL+"/api/v1/domains/availability?name=a.uz", "garbage", nil); resp.StatusCode != 200 {
 		t.Fatalf("public availability: %d", resp.StatusCode)

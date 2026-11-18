@@ -23,6 +23,7 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "apps.core",
     "apps.billing",
+    "apps.payments",
 ]
 
 MIDDLEWARE = [
@@ -108,6 +109,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "billing.expire_cancelled_subscriptions",
         "schedule": crontab(minute=30),
     },
+    "sync-checkout-transactions": {
+        "task": "payments.sync_checkout_transactions",
+        "schedule": crontab(minute="*/5"),
+    },
 }
 
 # --- Billing policy ---------------------------------------------------------------
@@ -115,5 +120,11 @@ BILLING_CURRENCY = env("BILLING_CURRENCY", "UZS")
 BILLING_INVOICE_DUE_DAYS = env_int("BILLING_INVOICE_DUE_DAYS", 3)
 BILLING_RENEWAL_LEAD_DAYS = env_int("BILLING_RENEWAL_LEAD_DAYS", 7)
 BILLING_SUSPEND_GRACE_DAYS = env_int("BILLING_SUSPEND_GRACE_DAYS", 5)
+
+# --- Payment providers ------------------------------------------------------------
+# Where providers send the customer after paying (``?invoice=<number>`` is appended).
+PAYMENTS_RETURN_URL = env("PAYMENTS_RETURN_URL", "https://xosting.net/billing/invoices")
+# Public origin of the API gateway; used to build provider webhook URLs.
+PAYMENTS_PUBLIC_BASE_URL = env("PAYMENTS_PUBLIC_BASE_URL", "https://api.xosting.net")
 
 LOGGING = django_logging_config(SERVICE_NAME, env("LOG_LEVEL", "INFO"))

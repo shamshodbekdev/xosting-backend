@@ -9,6 +9,7 @@ urlpatterns = [
     path("readyz", readyz, name="readyz"),
     path("metrics", metrics_view, name="metrics"),
     path("api/v1/billing/", include("apps.billing.urls")),
+    path("api/v1/payments/", include("apps.payments.urls")),
     path("api/v1/billing/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/v1/billing/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="docs"),
 ]

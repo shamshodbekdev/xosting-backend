@@ -33,6 +33,8 @@ data:
   BILLING_INVOICE_DUE_DAYS: "3"
   BILLING_RENEWAL_LEAD_DAYS: "7"
   BILLING_SUSPEND_GRACE_DAYS: "5"
+  PAYMENTS_PUBLIC_BASE_URL: https://api.xosting.net
+  PAYMENTS_RETURN_URL: https://xosting.net/billing/invoices
 
   # hosting-service
   ISPMANAGER_URL: https://panel.xosting.net:1500

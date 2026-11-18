@@ -66,6 +66,7 @@ func New(cfg config.Config, rdb *redis.Client, transport http.RoundTripper, log 
 		routes: []*Route{
 			{Name: "auth", Prefix: "/api/v1/auth", Upstream: cfg.Upstreams.Auth},
 			{Name: "billing", Prefix: "/api/v1/billing", Upstream: cfg.Upstreams.Billing},
+			{Name: "payments", Prefix: "/api/v1/payments", Upstream: cfg.Upstreams.Billing},
 			{Name: "hosting", Prefix: "/api/v1/hosting", Upstream: cfg.Upstreams.Hosting},
 			{Name: "domains", Prefix: "/api/v1/domains", Upstream: cfg.Upstreams.Domain},
 			{Name: "support", Prefix: "/api/v1/support", Upstream: cfg.Upstreams.Support},
