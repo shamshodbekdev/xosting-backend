@@ -45,6 +45,8 @@ var publicRules = []publicRule{
 	{path: "/api/v1/auth/admin", prefix: true},  // Django admin: session auth
 	{path: "/api/v1/auth/static", prefix: true}, // admin assets
 	{method: http.MethodGet, path: "/api/v1/billing/plans", prefix: true},
+	{path: "/api/v1/billing/admin", prefix: true},  // Django admin: session auth
+	{path: "/api/v1/billing/static", prefix: true}, // admin assets
 	{method: http.MethodGet, path: "/api/v1/payments/providers", prefix: true},
 	// Provider callbacks authenticate with provider-specific credentials/signatures.
 	{method: http.MethodPost, path: "/api/v1/payments/webhook", prefix: true},

@@ -1,3 +1,4 @@
+from django.contrib import admin
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from xosting_shared.metrics.django import metrics_view
@@ -8,6 +9,7 @@ urlpatterns = [
     path("healthz", healthz, name="healthz"),
     path("readyz", readyz, name="readyz"),
     path("metrics", metrics_view, name="metrics"),
+    path("api/v1/billing/admin/", admin.site.urls),
     path("api/v1/billing/", include("apps.billing.urls")),
     path("api/v1/payments/", include("apps.payments.urls")),
     path("api/v1/billing/schema/", SpectacularAPIView.as_view(), name="schema"),

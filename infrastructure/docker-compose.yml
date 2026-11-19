@@ -97,6 +97,7 @@ services:
       DJANGO_SECRET_KEY: ${BILLING_DJANGO_SECRET_KEY:?}
       DJANGO_DEBUG: ${DJANGO_DEBUG:-false}
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,auth-service,billing-service}
+      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-http://localhost:8080}
       DATABASE_URL: postgres://billing_user:${BILLING_DB_PASSWORD}@postgres:5432/billing_db
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2

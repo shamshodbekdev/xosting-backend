@@ -71,8 +71,8 @@ migrate: ## Apply database migrations for every service and seed the plan catalo
 seed: ## (Re)load the default billing plans
 	$(COMPOSE) exec -T billing-service python manage.py seed_plans
 
-superuser: ## Create a Django admin user in auth-service
-	$(COMPOSE) exec auth-service python manage.py createsuperuser
+superuser: ## Create a Django admin user (SERVICE=auth-service|billing-service, default auth)
+	$(COMPOSE) exec $(or $(SERVICE),auth-service) python manage.py createsuperuser
 
 # ------------------------------------------------------------- quality -------
 test: ## Lint + test every service inside Docker (no local toolchain needed)

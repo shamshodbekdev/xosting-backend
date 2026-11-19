@@ -32,6 +32,8 @@ RUN groupadd --system --gid 10001 app \
  && mkdir -p /tmp/prometheus && chown app:app /tmp/prometheus
 COPY --from=builder /opt/venv /opt/venv
 COPY --chown=app:app services/billing-service/ /app/
+RUN DJANGO_SECRET_KEY=collectstatic DATABASE_URL=sqlite:///:memory: JWT_SECRET=collectstatic \
+    python manage.py collectstatic --noinput --verbosity 0
 ENV PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus PORT=8000
 USER 10001:10001
 EXPOSE 8000
