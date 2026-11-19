@@ -1,3 +1,3 @@
 """Importing this package registers every provider implementation."""
 
-from . import checkout  # noqa: F401
+from . import checkout, click  # noqa: F401
