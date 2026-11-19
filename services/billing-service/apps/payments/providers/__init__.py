@@ -1,3 +1,3 @@
 """Importing this package registers every provider implementation."""
 
-from . import checkout, click, payme  # noqa: F401
+from . import checkout, click, payme, paynet, uzum  # noqa: F401
