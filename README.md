@@ -18,6 +18,7 @@ management, real-time support chat, and email/Telegram notifications.
 
 - [Architecture](#architecture)
 - [Services](#services)
+- [Payment providers](#payment-providers)
 - [Event catalogue](#event-catalogue)
 - [Repository layout](#repository-layout)
 - [Run locally (Docker Compose)](#run-locally-docker-compose)
@@ -113,7 +114,7 @@ sequenceDiagram
 |---|---|---|---|
 | [`api-gateway`](services/api-gateway) | Go `net/http` + `httputil.ReverseProxy` | 8080 | Single public entry point: routing, JWT validation, Redis rate limiting (per user / per IP, strict on credential endpoints), CORS, security headers, request IDs, WebSocket proxying, trusted-proxy aware client IPs. |
 | [`auth-service`](services/auth-service) | Django 6 · DRF · SimpleJWT | 8000 | Users (UUID, email login, roles), registration, JWT issue/refresh/rotation/blacklist, logout, profile, password change with global session revocation, Django admin, internal contact API. |
-| [`billing-service`](services/billing-service) | Django 6 · DRF · Celery | 8000 | Plan catalogue, subscriptions, invoices with gap-free numbering, idempotent payments, renewal invoicing, dunning (overdue → past due → suspended), expiry of cancelled subscriptions. |
+| [`billing-service`](services/billing-service) | Django 6 · DRF · Celery | 8000 | Plan catalogue, subscriptions, invoices with gap-free numbering, idempotent payments, renewal invoicing, dunning (overdue → past due → suspended), expiry of cancelled subscriptions. Online payments through **CHECKOUT.UZ, Click, Payme, Paynet and Uzum Bank**, each switchable in the Django admin. |
 | [`hosting-service`](services/hosting-service) | FastAPI · SQLAlchemy 2 (async) · Alembic | 8000 | Shared-hosting accounts provisioned on **ISPmanager 6** (user + web domain), suspend/resume/terminate, panel password reset. Idempotent provisioning workflow. |
 | [`domain-service`](services/domain-service) | FastAPI · SQLAlchemy 2 (async) · Alembic | 8000 | TLD price list, availability via **RDAP** (cached), registration requests, nameservers, DNS zone records with RFC validation (A, AAAA, CNAME, MX, TXT, NS, SRV, CAA; CNAME exclusivity). |
 | [`support-service`](services/support-service) | FastAPI · WebSocket · Redis Pub/Sub | 8000 | Helpdesk tickets and conversations; live chat over WebSocket that works across any number of replicas. |
@@ -131,6 +132,71 @@ conventions:
 | `shared/security` | JWT validation + FastAPI dependencies | — (gateway has its own validator) |
 | `shared/events` | Redis Streams event publisher (sync & async) | — (consumer lives in notification-service) |
 | `shared/fastapi_kit` | Error envelope, probes, observability wiring | — |
+
+## Payment providers
+
+The `payments` app of billing-service (`services/billing-service/apps/payments`)
+accepts online payments in UZS. Every provider credits invoices through the same
+idempotent `record_payment`. The idempotency key is `<provider>:<provider transaction id>`,
+so a repeated or replayed callback can never pay an invoice twice. The customer-facing
+reference is always the **invoice number** (`INV-2026-000123`).
+
+| Provider | Protocol | Authentication | Amount unit | Webhook |
+|---|---|---|---|---|
+| CHECKOUT.UZ | REST v2 (`create_payment`, `status_payment`) | `Authorization: Bearer <api_key>` outbound; secret `?token=` on the webhook | so'm | `POST /api/v1/payments/webhook/checkout/` |
+| Click | SHOP API, Prepare (`action=0`) / Complete (`action=1`) | MD5 `sign_string` | so'm | `POST /api/v1/payments/webhook/click/` |
+| Payme | Merchant API, JSON-RPC 2.0 | HTTP Basic `Paycom:<key>` | tiyin | `POST /api/v1/payments/webhook/payme/` |
+| Paynet | Provider web service, SOAP 1.1 | `username` / `password` in the request | tiyin (configurable) | `POST /api/v1/payments/webhook/paynet/` |
+| Uzum Bank | Merchant API (`check`, `create`, `confirm`, `reverse`, `status`) | HTTP Basic + `serviceId` | tiyin | `POST /api/v1/payments/webhook/uzum/<operation>/` |
+
+**Customer API (via the gateway)**
+
+```bash
+# Methods the customer can choose (only enabled providers are listed)
+curl -s localhost:8080/api/v1/payments/providers/
+
+# Start paying an invoice: returns payment_url (CHECKOUT.UZ, Click, Payme) or,
+# for Paynet / Uzum (paid inside their apps), the account number to enter.
+curl -s -X POST localhost:8080/api/v1/payments/checkout/ -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"invoice_id": "<uuid>", "provider": "payme"}'
+```
+
+**Enabling a provider.** Open the billing admin at `/api/v1/billing/admin/`
+(`make superuser SERVICE=billing-service`) and go to **Payment Providers**. A row for
+each provider is created automatically by `migrate`, and every provider starts
+**disabled**. Paste the credentials into *config* (JSON) and switch *Is active* on,
+either in the list or with the bulk *Enable/Disable selected providers* actions. A
+provider cannot be enabled while required keys are missing. A disabled provider's
+webhook answers **HTTP 403**. Each provider's page shows the exact webhook URL to
+register with that provider.
+
+| Provider | `config` keys (required in **bold**) |
+|---|---|
+| CHECKOUT.UZ | **`api_key`**, **`webhook_token`** (random secret), `webhook_url`, `base_url`, `expire_seconds` |
+| Click | **`service_id`**, **`merchant_id`**, **`secret_key`**, `merchant_user_id` |
+| Payme | **`merchant_id`**, **`secret_key`**, `account_field` (default `order_id`), `login` (default `Paycom`), `test_mode` |
+| Paynet | **`username`**, **`password`**, `service_id`, `account_param` (default `account`), `amount_unit` (`tiyin` / `sum`) |
+| Uzum Bank | **`service_id`**, **`login`**, **`password`**, `account_field` (default `account`) |
+
+**Behaviour worth knowing**
+
+- **CHECKOUT.UZ webhooks are not signed.** The webhook is therefore only a trigger:
+  it must carry the secret `webhook_token`, and the status and amount are re-read
+  from `status_payment` before the invoice is credited. CHECKOUT.UZ does not retry
+  webhooks, so Celery beat runs `payments.sync_checkout_transactions` every 5 minutes
+  to reconcile pending payments.
+- **Payme**: transactions expire after 12 hours (cancelled with reason 4). Only one
+  pending transaction per invoice is allowed (`-31051`). `ChangePassword` rotates the
+  stored key.
+- **Refunds are manual.** Once an invoice is credited the service may already be
+  provisioned, so automated cancellation of a *completed* payment is refused
+  (Payme `-31007`, Paynet `77`, Uzum `10007`). Staff handle these refunds. Pending
+  (unpaid) transactions can always be cancelled.
+- Every attempt is stored as a `Transaction` with the raw provider payloads. They
+  are visible read-only in the admin.
+- Error and status codes for Paynet and Uzum follow their published merchant
+  protocols as implemented by the community integrations. Check them against
+  your contract's specification and sandbox before going live.
 
 ## Event catalogue
 
@@ -260,7 +326,7 @@ and CI runs the same thing.
 | Service | Highlights of what is covered |
 |---|---|
 | auth | registration + event emission, duplicate/weak passwords, JWT claims, logout blacklisting, password change revokes sessions, throttling (and fail-open on cache outage), internal API auth, probes |
-| billing | catalogue, ownership isolation, idempotent payments, wrong amount / double pay, activation, renewal generation (idempotent), dunning to suspension, expiry, sequential invoice numbers |
+| billing | catalogue, ownership isolation, idempotent payments, wrong amount / double pay, activation, renewal generation (idempotent), dunning to suspension, expiry, sequential invoice numbers; payment providers: CHECKOUT.UZ (status re-check, token, reconciliation), Click signatures and Prepare/Complete, Payme JSON-RPC state machine and timeouts, Paynet SOAP (incl. XML entity attacks), Uzum operations, 403 for disabled providers, admin toggles |
 | hosting | provisioning against a fake ISPmanager, error mapping, duplicate domains, staff-only lifecycle, password reset, credentials never sent in the URL |
 | domain | RDAP available/taken/unknown, caching, IDN names, registration flow, privacy, nameserver and DNS-record validation, CNAME exclusivity |
 | support | conversation status machine, privacy, customer permissions, WebSocket auth close codes, cross-channel fan-out through Pub/Sub |
@@ -365,7 +431,7 @@ environment and fail fast on startup if a required value is missing.
 
 This is **Phase 1**: the platform scaffold with working core domain logic. Planned next:
 
-- Payment provider adapters (Payme, Click, Uzum) on top of the existing idempotent `record_payment`
+- Automated refunds for completed provider payments (currently handled by staff)
 - Registrar integration (EPP / reseller API) to complete `domain.registration_requested`
 - Event-driven provisioning: `subscription.activated` → hosting account; `subscription.suspended` → panel suspension
 - Transactional outbox for guaranteed event delivery
