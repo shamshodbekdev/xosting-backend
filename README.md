@@ -1,16 +1,18 @@
 # xosting.net — Backend Platform
 
+[![CI](https://github.com/shamshodbekdev/xosting-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/shamshodbekdev/xosting-backend/actions/workflows/ci.yml)
+
 A polyglot microservices backend for **xosting.net**, a web-hosting and domain provider:
 customer accounts, billing and subscriptions, ISPmanager-backed hosting, domain and DNS
 management, real-time support chat, and email/Telegram notifications.
 
 | | |
 |---|---|
-| **Languages** | Python 3.12 (Django 6, FastAPI), Go 1.27 |
+| **Languages** | Python 3.12 (Django 6, FastAPI), Go 1.26 |
 | **Data** | PostgreSQL 17 (one database per service), Redis 7 (Streams, Pub/Sub, Celery broker, rate limits, cache) |
 | **Runtime** | Docker (multi-stage, non-root, distroless for Go), Kubernetes (kustomize) |
 | **Observability** | Structured JSON logs, Prometheus RED metrics, OpenTelemetry tracing |
-| **Quality** | 79 automated tests, ruff/gofmt/go vet, CI on every push |
+| **Quality** | 130 automated tests, ruff/gofmt/go vet, CI on every push |
 
 ---
 
@@ -351,7 +353,7 @@ The manifests in [`infrastructure/k8s`](infrastructure/k8s) form a kustomize bas
 ClusterIssuer, metrics-server, and a default StorageClass.
 
 ```bash
-# 1. Build and push images (or let CI publish them to GHCR on every push to main)
+# 1. Build and push images (or let CI publish them to GHCR, see "Container images" below)
 make push TAG=v1.0.0
 
 # 2. Provide secrets (never committed)
@@ -364,6 +366,11 @@ make deploy-k8s TAG=v1.0.0
 make k8s-status        # inspect workloads
 make k8s-render        # print the fully rendered manifests
 ```
+
+**Container images.** The `publish images` CI job pushes every service to
+`ghcr.io/shamshodbekdev/xosting-<service>` on pushes to `main`. It is opt-in: set the
+repository variable `PUBLISH_IMAGES` to `true` (Settings → Secrets and variables →
+Actions → Variables) once the GHCR packages grant this repository write access.
 
 The pipeline is GitOps-ready: `kubectl kustomize infrastructure/k8s` output can be
 handed to Argo CD or Flux unchanged.
