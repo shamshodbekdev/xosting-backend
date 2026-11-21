@@ -57,7 +57,8 @@ jobs:
 
   publish:
     name: publish images
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Opt-in: set the repository variable PUBLISH_IMAGES=true once GHCR write access is granted.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PUBLISH_IMAGES == 'true'
     needs: [test, manifests]
     runs-on: ubuntu-latest
     permissions:
@@ -88,6 +89,9 @@ jobs:
           target: runtime
           push: true
           build-args: VERSION=${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
           tags: |
             ghcr.io/${{ github.repository_owner }}/xosting-${{ matrix.service }}:${{ github.sha }}
             ghcr.io/${{ github.repository_owner }}/xosting-${{ matrix.service }}:latest
